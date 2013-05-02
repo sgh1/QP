@@ -8,6 +8,10 @@
 
 using namespace std;
 
+/////////////////////////
+//Sparse Data Member
+////////////////////////
+
 template<class T>
 class dat
 {
@@ -20,42 +24,54 @@ public:
 	int	col_;	
 };
 
+/////////////////////////
+//Sparse Matrix Class
+////////////////////////
+
 
 template<class T>
 class cmat
 {
 	public:
 		
+		//Sparse matrix data vector and 
+		//row index vector
 		vector< dat<T>  > 	mat_data_;
 		vector< int > 		row_idx_;			
 	
+		//auxilliary vectors
 		T*	diag_table_;
 		T*	x_extra;
 
 		cmat();
-		~cmat(){}
+		~cmat(){/*delete diag_table_*/}
 		void print();
 		void insert( dat<T> k, int i, int j);
-
-		static void print_dense_vector(T* x, int n, string desc = "");
+				
+		//vector operations
+		static complex<double> 	vect_dot( complex<double>* a, complex<double>* b, int n);
+		static void vect_add( T* a, T* b, T* res, T alpha, int n);
+		static void vect_sub( T* a, T* b, T* res, T alpha, int n);
+		static void vect_copy( T* a, T* b, int n);
+		
+		//Math functions: conjugate gradient, jacobi,
+		//and matrix vector product
+		void cg(T* x, T* b, int iters);
+		void jacobi(T* x, T* b, int iters);
+		void mv( T* x, T* b);
+		
+		void new_row();	//add a new row to the sparse matrix
+		inline int m(); //get size of (square) sparse matrix
+		
+		//make vector of diagonal elements of matrix
 		void make_diag_table();
 		void get_range(int &start, int &end, int i);
 		
-		static complex<double> 	vect_dot( complex<double>* a, complex<double>* b, int n);
-		static void 			vect_add( T* a, T* b, T* res, T alpha, int n);
-		static void 			vect_sub( T* a, T* b, T* res, T alpha, int n);
-		static void 			vect_copy( T* a, T* b, int n);
-		
-		void cg(T* x, T* b, int iters);
+		//debug, etc.
 		void print_full(ostream &outStr);
-		void jacobi(T* x, T* b, int iters);
-		void new_row();
-		void mv( T* x, T* b);
-				
 		double print_norm(T* a, T* b, int n, int k);
-		inline int m();
-
-	
+		static void print_dense_vector(T* x, int n, string desc = "");
+		
 	
 };
 

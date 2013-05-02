@@ -9,12 +9,12 @@
 
 using namespace std;
 
+
 struct node_data
 {
 	double V;
 	complex<double> psi;
 };
-
 
 
 class domain
@@ -34,11 +34,11 @@ public:
 	}
 
 	//utility
-	void allocate_nodes();
-	void dump(ostream &str);
-	void dump_separate(string prefix);
-	inline int idx(int i, int j){	return i*cols_+j; }
-	void copy_to_last();
+	void		allocate_nodes();
+	void		dump(ostream &str);
+	void		dump_separate(string prefix);
+	inline int	idx(int i, int j){	return i*cols_+j; }
+	void		copy_to_last();
 	
 	//potential
 	void make_barrier(double V0, double x0, double x1, double y0, double y1);
@@ -58,9 +58,6 @@ public:
 	double	psi_sum();
 	void	init_psi(double kx, double ky, double sigma, double x0, double y0);
 	
-	cmat< complex<double> >*		cn_b;
-	cmat< complex<double> >*		cn_x;
-	cmat< complex<double> >*		cn_A;
 	
 	//members
 	double		dx_;
@@ -69,6 +66,10 @@ public:
 	int			cols_; //diff. by dx
 	node_data**	d_; 
 	node_data** d_last_;
+
+	cmat< complex<double> >*		cn_b;
+	cmat< complex<double> >*		cn_x;
+	cmat< complex<double> >*		cn_A;
 		
 
 };

@@ -179,6 +179,10 @@ namespace examples
 	void run_cn2()
 	{
 	
+		/////////////////////////
+		//Free Prop. Experiment
+		////////////////////////
+
 		double dx =		.025;
 		double dy =		.005;
 		double x_max =	1;
@@ -215,38 +219,39 @@ namespace examples
 	void run_cn3()
 	{
 	
+		/////////////////////////
+		//Potential Barrier/Tunneling Experiment
+		////////////////////////
+
 		double dx =		.01;
 		double dy =		.01;
 		double x_max =	1.5;
 		double y_max =	1;
 		double dt =		5e-6;
 		double n =		20000;
-		//ofstream mat_out;
 		vector<double> norms;
 		double normloss;
-		//mat_out.open("cn_matrix.txt");
-
+		
 		domain* mydom = new domain(int(y_max/dy),int(x_max/dx),dx,dy);
 		mydom->allocate_nodes();
 		mydom->init_psi(20,0,.1,x_max/3,y_max/2);
 		
 		//exp(1x) * 10
 		mydom->make_wall_barrier(5.,30);
-			
+		
+		//Make potential barrier and init.
+		//Crank-Nicholson Matrix, A
 		mydom->gauss_barrier_x(x_max/2,0,y_max,1e3,x_max/2,.01);
-		//mydom->cn_A->print_full(mat_out);
 		mydom->copy_to_last();
 		mydom->cn_init(dt);
 
+		//do timestepping
 		for(int i = 0; i < n; i++)
 		{			
-			//mydom->dump(cout);
 			mydom->timestep_cranknicholson(dt);
-			//mydom->timestep_euler(dt);
-			//mydom->psi_sum();				
+		
 			if(i % 100 == 0)
-			{	
-
+			{
 				cout << "\n++++++++++++\nStep: " << i << endl;
 				norms.push_back( mydom->psi_sum());
 				normloss = ( (norms[norms.size()-1] - norms[0]) / norms[0])*100;
@@ -259,7 +264,11 @@ namespace examples
 
 	void run_cn4()
 	{
-	
+
+		/////////////////////////
+		//Double Slit Experiment
+		////////////////////////
+			
 		double dx =		.01;
 		double dy =		.01;
 		double x_max =	2.5;
@@ -268,36 +277,30 @@ namespace examples
 		double n =		20000;
 		double k =		60;
 		double aperature_size = (2*3.14159) / k;
-		//ofstream mat_out;
 		vector<double> norms;
 		double normloss;
-		//mat_out.open("cn_matrix.txt");
-
+		
 		domain* mydom = new domain(int(y_max/dy),int(x_max/dx),dx,dy);
 		mydom->allocate_nodes();
 		mydom->init_psi(k,0,.2,x_max/3,y_max/2);
 		
 		//exp(1x) * 10
-		mydom->make_wall_barrier(10.,30);
+		mydom->make_wall_barrier(5.,30);
 		
-		//make the double slit:
+		//Make the double slit:
 		mydom->gauss_barrier_x(x_max/2,0,y_max/2-1.5*aperature_size,1e3,x_max/2,.015);
 		mydom->gauss_barrier_x(x_max/2,y_max/2+1.5*aperature_size,y_max,1e3,x_max/2,.015);
 		mydom->gauss_barrier_x(x_max/2,y_max/2-0.5*aperature_size,y_max/2+0.5*aperature_size,1e3,x_max/2,.015);
 				
-		//mydom->cn_A->print_full(mat_out);
 		mydom->copy_to_last();
 		mydom->cn_init(dt);
 
 		for(int i = 0; i < n; i++)
 		{			
-			//mydom->dump(cout);
 			mydom->timestep_cranknicholson(dt);
-			//mydom->timestep_euler(dt);
-			//mydom->psi_sum();				
+			
 			if(i % 100 == 0)
-			{	
-
+			{
 				cout << "\n++++++++++++\nStep: " << i << endl;
 				norms.push_back( mydom->psi_sum());
 				normloss = ( (norms[norms.size()-1] - norms[0]) / norms[0])*100;
