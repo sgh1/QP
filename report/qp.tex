@@ -49,9 +49,8 @@
 			frame=shadowbox, 
 			rulesepcolor=\color{blue}}
 			
-\title{Molecular Dynamics -- Argon}
+\title{2D Schr\"{o}dinger Dynamics Simulation}
 \author{Sean Hatch, PHY 480}
-
 \begin{document}
 
 
@@ -74,27 +73,156 @@
 
 \section{Introduction and Goals}
 
-For this project, our basic goal is to simulate a three-dimensional, periodic system of Argon atoms in order to obtain or verify statistical properties of the system as a whole, such as its pair correlation distribution, or $<r^2>$, the mean squared distance moved by a given atom. To accomplish this, a code is produced which is briefly described by the following pseudocode:
+For this project, our basic goal is to numerically simulate a Gaussian wave packet in a two-dimensional domain using the time-dependent Schr\"{o}dinger's equation:
+\begin{equation}
+\begin{split}
+- \frac{1}{2}\nabla^2 \psi(\mathbf{r},t) + V(r)\psi(\mathbf{r},t) = \mathrm{i}\hbar\partial_t\psi(\mathbf{r},t)
+\end{split}
+\end{equation}
+
+Where the wave packet is initialized to:
+
+\begin{equation}
+\begin{split}
+\psi(\mathbf{r},t = 0) = \mu\exp( - \frac{(\mathbf{r} - \mathbf{r_0})^2}{2\sigma^2} )*\exp(\mathrm{i}\mathbf{k}\cdot\mathbf{r})
+\end{split}
+\end{equation}
+
+
+We use reference \citep{reference} as a starting point. In \citep{reference}, the authors described the requisite numerical methods used to perform the simulation, and matched some canonical results.
+
+For this work, we will develop only a two-dimensional model, and try to validate our code against the reference work.  In particular, we chose to replicate the following experiments: (1) Free propagation of Gaussian wave packet, (2) Gaussian wave packet normally incident upon a potential barrier, and (3) Young's double-slit experiment. 
+
+\section{Algorithm Details}
+
+\citep{reference} introduces the numerical methods used to solve the problem at hand, and some details about them are described here.
+
+\subsection{Time-Stepping Schemes}
+
+To perform the time-stepping for the simulation, three schemes were suggested: (1) A forward Euler method, (2) a Runge-Kutta method, and (3) the Crank-Nicholson scheme. Two of the three were implemented for the present project, and some details will be discussed below.
+
+\subsubsection{Euler Method}
+
+This method uses a center difference for the spatial second-order derivatives, and a forward difference for the time step.  For the one-dimensional Schr\"{o}dinger's equation, this scheme results in the following update equation:
+
+\begin{equation}
+\begin{split}
+\frac{-\delta t}{2i\delta x^2}\psi^n_{i-1} + 
+\frac{-\delta t}{2i\delta x^2}\psi^n_{i+1} +
+( \frac{\delta t}{i\delta x^2} + \frac{\delta t} {i}V^n_{i} + 1)\psi^n_{i}  = \psi^{n+1}_{i} 
+\end{split}
+\end{equation}
+
+Since this is an explicit finite-difference scheme, the time step must be chosen carefully to ensure stability in the simulation. The maximum time step to ensure stability can be rigorously derived (see, for example \citep{eulerstab}), but for now, we will just use time steps of about 1e-6, as suggested by \citep{reference}.
+
+The two-dimensional Euler scheme is listed below:
+
+\begin{equation}
+\begin{split}
+\frac{-\delta t}{2i\delta x^2}\psi^n_{i-1,j} + 
+\frac{-\delta t}{2i\delta x^2}\psi^n_{i+1,j} +
+\frac{-\delta t}{2i\delta y^2}\psi^n_{i,j-1} + 
+ \frac{-\delta t}{2i\delta y^2}\psi^n_{i,j+1} + \\ 
+(  \frac{\delta t}{i\delta x^2} + \frac{\delta t}{i\delta y^2} + \frac{\delta t} {i}V^n_{i,j} + 1)\psi^n_{i,j}  = \psi^{n+1}_{i,j} 
+\end{split}
+\end{equation}
+
+For the present work, the stability requirement proved too prohibitive to produce any meaningful or high resolution results. The method was implemented in the code, but was not used to generate any of the results.
+
+\subsubsection{Runge-Kutta method}
+
+The authors of \citep{reference} presented a Runge-Kutta method as a time-stepping scheme.  In theory, the accuracy of this scheme allows for larger timesteps, and many of the results in \citep{reference} were generated with this scheme.
+
+However, I was a bit skeptical of some aspects of this scheme:
 
 \begin{itemize}
-  \item Initialize atom positions in a face-centered cubic (FCC) lattice.
-  \item Initialize atom velocity using the Box-Muller method.
-  \item Make sure distribution has zero net velocity.
-  \item Compute initial force using Lennard Jones potential.
-  \item For each time step:
-	\begin{itemize}
-  	\item Update atom positions using Verlet algorithm.
-  	\item Compute next force using Lennard Jones potential.
-  	\item Update atom velocities using Verlet algorithm.
-  	\item If necessary, rescale velocities to correct temperature.
-	\item Collect observable information
-	 
-	\end{itemize}
-\item end loop  
+  \item The stages of the RK4 method presented in \citep{reference} all appear to use samples from $\psi^{n-1}$ -- the wave function at the previous time step. The canonical method uses three different points in time to compute the stages. 
+  \item In general, computing the stages of the RK4 method appear to require spatial interpolation, since the right hand side is itself computed from a finite difference scheme. This also may lead to diminished accuracy.
 \end{itemize}
 
-More details about the Lennard-Jones potential and the velocity Verlet algorithm can be found in the class lectures(\cite{md1},\cite{md2}).  Also, the original paper on this topic can be found at \cite{original}.
+Furthermore, the implementation of this method can be more challenging to implement if $\psi$ is stored with a data type similar to C++'s std::complex, as opposed to a code where real and imaginary arrays are stored separately.
 
+(Okay, I probably just don't understand this method too well, or was confused by the notation).
+
+
+\subsubsection{Crank-Nicholson method}
+
+The Crank-Nicholson method is an implicit method, where, essentially, the time derivative (ie, $\psi^{n+1}$) is computed based on an average of spatial derivatives from the current time step, and the next time step. This scheme, in theory, has no stability requirement, but we are at the mercy of obtaining an accurate matrix solution. A good introduction to this method can be found in \citep{heat}.  After some algebra, we come to the update equation listed below:
+  
+\begin{equation}
+\begin{split}
+\frac{-\delta t}{4i\delta x^2}\psi^n_{i-1,j} + 
+\frac{-\delta t}{4i\delta x^2}\psi^n_{i+1,j} +
+\frac{-\delta t}{4i\delta y^2}\psi^n_{i,j-1} + 
+ \frac{-\delta t}{4i\delta y^2}\psi^n_{i,j+1} + \\ 
+(  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta y^2} + \frac{\delta t} {2i}V^n_{i,j} + 1)\psi^n_{i,j} + \\
+ \frac{-\delta t}{4i\delta x^2}\psi^{n+1}_{i-1,j} + 
+ \frac{-\delta t}{4i\delta x^2}\psi^{n+1}_{i+1,j} + 
+\frac{-\delta t}{4i\delta y^2}\psi^{n+1}_{i,j-1} + 
+ \frac{-\delta t}{4i\delta y^2}\psi^{n+1}_{i,j+1} + \\ 
+(  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta y^2} + \frac{\delta t} {2i}V^{n+1}_{i,j} -1)\psi^{n+1}_{i,j} = 0 
+\end{split}
+\end{equation}
+
+Clearly, we cannot update each $\psi$ independently, so a matrix solution is required to compute the update. The required matrix equation is shown below.
+
+\begin{equation}
+\begin{tikzpicture}[baseline=(current bounding box.center)]
+\matrix (m) [matrix of math nodes,nodes in empty cells,right delimiter={]},left delimiter={[} ]{
+1 &  & && & &  & &  \\
+& 1 &  & && & &  & &  \\
+\ddots & \ddots & \ddots & \ddots & \ddots & \ddots &\ddots & \ddots & \ddots \\
+c & \cdots & b	&	a_{1,1}	& b &	\cdots & c  & \cdots & \cdots \\
+\cdots & c & \cdots & b	&	a_{2,1}	& b &	\cdots & c  & \cdots \\
+\ddots & \ddots & \ddots & \ddots & \ddots & \ddots &\ddots & \ddots & \ddots \\
+} ;\end{tikzpicture}
+\begin{pmatrix}
+\psi^{n+1}_{0,0} \\ \psi^{n+1}_{1,0}\\\vdots\\ \psi^{n+1}_{0,1} \\ \psi^{n+1}_{1,1} \\\vdots  
+\end{pmatrix}=
+\begin{pmatrix}
+d^{n}_{0,0} \\ d^{n}_{1,0}\\\vdots\\ d^{n}_{0,1} \\ d^{n}_{1,1} \\\vdots  
+\end{pmatrix}
+\label{eq:eqq1}
+\end{equation}
+
+The RHS of this equation consists of the terms of equation (5) from the previous timestep.  
+
+The coefficient matrix can be difficult to visualize, and some subtleties are worth discussing.  First, the ones along the diagonal enforce the boundary condition that the next value of $\psi$ is equal to the previous value of $\psi$ on the boundaries.  These rows are not needed in the matrix, but including them ensures that the coefficients $a_{i,j}$ remain on the diagonal of the matrix.  This is important, since these values are often larger in magnitude than $b$ and $c$, so this matrix is more likely to be diagonally-dominant, or at least close to it.  For diagonally-dominant matrices, a simple matrix-splitting technique, like a Jacobi iteration, can solve the matrix equation. However, for the present work, conjugate gradient turned out to be the solution method of choice.
+
+Note that the vector $\psi^{n+1}$ reflects the "x-major" storage used to store the domain.   
+
+The coefficients used in the above matrix equation are shown below.
+\begin{equation}
+\begin{split}
+c = \frac{-\delta t}{4i\delta x^2} \\
+b = \frac{-\delta t}{4i\delta y^2} \\
+a_{i,j} = (  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta y^2} + \frac{\delta t} {2i}V^{n+1}_{i,j} - 1) \\
+d_{i,j} = 	\frac{-\delta t}{4i\delta x^2}\psi^n_{i-1,j} + 
+			\frac{-\delta t}{4i\delta x^2}\psi^n_{i+1,j} +
+			\frac{-\delta t}{4i\delta y^2}\psi^n_{i,j-1} + 
+ 			\frac{-\delta t}{4i\delta y^2}\psi^n_{i,j+1} + \\ 
+			(  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta y^2} + \frac{\delta t} 				{2i}V^n_{i,j} + 1)\psi^n_{i,j}\\
+\end{split}
+\end{equation}
+
+Finally, here are a few other notes about obtaining the matrix solution:
+\begin{itemize}
+  \item From these equations, we see that $a_{i,j}$ has terms of differing sign, so we cannot be sure that the coefficient matrix is diagonally-dominant.
+  \item In general, for iterative matrix solvers, we must start with an initial guess.  The matrix solution may converge more quickly if the supplied guess is the solution from the last time-step (which will be somewhat similar to the solution for the next time-step). However, the solution becomes less similar to that of the previous time step as our time step increases.  In the end, a balance should be struck between these two factors.
+  \end{itemize}
+
+\subsection{Boundary Conditions}
+
+For any finite difference simulation, boundary conditions must be considered.  The authors of \citep{reference} chose to setup an exponential potential wall around the periphery of the domain to create a potential well.  The present work uses the same method, and the potential is initialized based on the following equation:
+
+\begin{equation}
+\begin{split}
+V_{i,j} = c( \exp(a(idy-y_L) + \exp(a(jdx-x_L) + \exp(-aidy) + \exp(-a j dx) )
+\end{split}
+\end{equation}
+
+Where the parameters $a$ and $c$ are chosen somewhat experimentally.  A term like $idy$ is simply the y coordinate of the $i$'th row of the domain.   
+   
 \section{\bf Commented Source Code}
 
 All of the source code used for the project is posted below.  Each listing
@@ -181,7 +309,8 @@ public:
 \end{lstlisting}
 \vspace{5 mm}
 
-The particle list class abstracts the group of particles (in our case, Argon atoms) used in the MD simulation. Abstracting the group of atoms rather than each atom often leads to simpler and less cumbersome code.  The methods contained in this class deal with the core of the MD simulation -- the Verlet algorithm and the thermostat -- and also manage fundamental observables.  Details will be discussed shortly. 
+The domain class abstracts the information related to the simulation domain.  It contains most of the key data, the finite difference schemes, and methods to set up the initial potentials in the domain.  Also note that the key simulation data ($\psi$ and $V$) are stored node-wise in a struct.
+
 \vspace{5 mm}
 
 \begin{lstlisting}[caption=Domain class implementation].
@@ -522,15 +651,13 @@ void domain::gauss_barrier_x(	double x0, double y0, double y1,
 		}
 	}
 }
-
-
-
 \end{lstlisting}
 
 \vspace{5 mm}
 
-The listing shown above should have enough comments to explain most of the methods, but some additional information will be discussed throughout the report.
+The most important part of the domain class is the implementation of the numerical schemes from section 2. The method $domain::time\_stepeuler()$ implements the Euler method.  The method $domain::cn\_init()$ sets up the sparse coefficient matrix (see eq.(6)), and $timestep\_cranknicholson()$ sets up and solves the matrix equation at each time step.
 
+Also, note that functions such as $domain::gauss\_barrier\_x()$ can be used to specify a potential barrier at a given x-coordinate with specified y-extents.  Therefore, this function can be used as a sort of building block to create more complex potentials.  For example, we can setup the potential used for the double-slit experiment with three calls to this function.
 \vspace{5 mm}
 
 \begin{lstlisting}[caption=sparse matrix class template].
@@ -892,7 +1019,13 @@ inline int cmat<T>::m(){ return row_idx_.size(); }
 \end{lstlisting}
 
 \vspace{5 mm}
-util.cpp contains the implementation for many of 'auxillary' functions required for the MD simulation.  It is noted that, for the Box-Muller function, the original, less robust version is used.  A more robust and efficient implementation is given in \citep{numerical}.
+
+The code above is a class template for sparse matrix operations.  Templating this class is probably excessive for the current project, but this template can now be used in any other project requiring sparse matrix operations, without much modification.
+
+Most of the methods in the class essentially help us implement the sparse conjugate gradient method, or the sparse Jacobi iteration, one of which is required to solve the matrix equation required for the Crank-Nicholson update. 
+
+Much of the functionality found in this class is already implemented elsewhere in third-party libraries, but I wrote my own to keep debugging and building simple.
+  
 \vspace{5 mm}
 
 \begin{lstlisting}[caption=examples.h].
@@ -1025,55 +1158,7 @@ namespace examples
 		A.mv(x,b);
 		//A.print_dense_vector(b,A.m());
 	}
-
-
-
 	void setup_potential(){}
-
-
-	void run_cn()
-	{
-	
-		double dx =		.005;
-		double dy =		.005;
-		double x_max =	1;
-		double y_max =	1.5;
-		double dt =		1e-5;
-		double n =		200;
-		ofstream mat_out;
-		vector<double> norms;
-		double normloss;
-		mat_out.open("cn_matrix.txt");
-
-		domain* mydom = new domain(int(x_max/dx),int(y_max/dy),dx,dy);
-		mydom->allocate_nodes();
-		mydom->init_psi(0,20,.1,x_max/2,y_max/2);
-		
-		//exp(1x) * 10
-		mydom->make_wall_barrier(10.,1);
-		mydom->cn_init(dt);
-	
-		//mydom->cn_A->print_full(mat_out);
-
-		mydom->copy_to_last();
-	
-		for(int i = 0; i < n; i++)
-		{			
-			//mydom->dump(cout);
-			mydom->timestep_cranknicholson(dt);
-			//mydom->psi_sum();				
-			if(i % 10 == 0)
-			{				
-				cout << "Step: " << i << endl;
-				norms.push_back( mydom->psi_sum());
-				normloss = ( (norms[norms.size()-1] - norms[0]) / norms[0])*100;
-				cout << "Norm Loss is: " << normloss << endl;
-
-				mydom->dump_separate( string( "output_step" + 
-					to_string( (long long) i) +"_") );
-			}
-		}
-	}
 
 	void run_cn2()
 	{
@@ -1218,139 +1303,17 @@ namespace examples
 
 \vspace{5mm}
 
+The examples namespace just contains functions that perform some of the numerical experiments from \citep{reference}.  We will use these examples to validate the code. These functions and the simulations that they perform are further discussed in the next section.
 
 \vspace{5mm}
 
-main.cpp is used to run the numerical experiments.  It is a essentially a more complicated version of the pseudocode presented in the introduction.  
-
-\section{Algorithm Details}
-
-\subsection{Integrators}
-
-To perform the time-stepping for the simulation, three schemes were suggested: (1) A forward Euler method, (2) a Runge-Kutta method, and (3) the Crank Nicholson scheme. Two of the three were implemented for the present project, and some details will be discussed below.
-
-\subsubsection{Euler Method}
-
-This method uses a center difference for the spatial second-order derivatives, and a forward difference for the time-step.  For the one-dimensional Schrodinger's equation, this scheme results in the following update equation:
-
-\begin{equation}
-\begin{split}
-\frac{-\delta t}{2i\delta x^2}\psi^n_{i-1} + 
-\frac{-\delta t}{2i\delta x^2}\psi^n_{i+1} +
-( \frac{\delta t}{i\delta x^2} + \frac{\delta t} {i}V^n_{i} + 1)\psi^n_{i}  = \psi^{n+1}_{i} 
-\end{split}
-\end{equation}
-
-Since this is an explicit finite-difference scheme, the time step must be chosen carefully to ensure stability in the simulation.  References ... contain information about deriving the stability limit, but for now, we will trust 's suggestion that timesteps below about 1 us result in instabilities. 
-
-The two-dimensional Euler scheme is listed below:
-
-
-\begin{equation}
-\begin{split}
-\frac{-\delta t}{2i\delta x^2}\psi^n_{i-1,j} + 
-\frac{-\delta t}{2i\delta x^2}\psi^n_{i+1,j} +
-\frac{-\delta t}{2i\delta y^2}\psi^n_{i,j-1} + 
- \frac{-\delta t}{2i\delta y^2}\psi^n_{i,j+1} + \\ 
-(  \frac{\delta t}{i\delta x^2} + \frac{\delta t}{i\delta y^2} + \frac{\delta t} {i}V^n_{i,j} + 1)\psi^n_{i,j}  = \psi^{n+1}_{i,j} 
-\end{split}
-\end{equation}
-
-For the present work, this scheme wasn't used much.  The stability criterion required the time step to be very small, which usually translated to very long simulation time for a reasonably-sized 2D domain.
-
-\subsubsection{Runge-Kutta method}
-
-The authors of [] presented a Runge-Kutta method as the time-stepping scheme.  The accuracy of this scheme allows for larger timesteps, and many of the results in [] were generated with this scheme.
-I was a bit skeptical of some aspects of this scheme:
-
-\begin{itemize}
-  \item The stages of the RK4 method presented in [] all involve samples from $\psi^{n-1}$ -- the wavefunction at the previous time step, not three different points in time as in the normal RK4 method. 
-  \item In general, computing the stages of the RK4 method require spatial interpolation, since the right hand side is itself computed from a finite difference scheme.
-\end{itemize}
-
-Furthermore, the implementation of this method can be more challenging to implement if $\psi$ is stored with a datatype similar to C++'s std::complex, as opposed to a code where real and imaginary arrays are stored separately.
-
-(Okay, I probably just don't understand this method too well.)
-
-
-\subsubsection{Crank-Nicholson method}
-
-The Crank-Nicholson method is an implicit method, where, essentially, the time derivative (ie, $\psi^{n+1}$) is computed based on an average of spatial derivatives from the current time step, and the next time step. This scheme, in theory, has no stability requirement, but we are at the mercy of obtaining an accurate matrix solution. A good introduction to this method can be found in [].  After some algebra, we come to the update equation listed below:
-  
-\begin{equation}
-\begin{split}
-\frac{-\delta t}{4i\delta x^2}\psi^n_{i-1,j} + 
-\frac{-\delta t}{4i\delta x^2}\psi^n_{i+1,j} +
-\frac{-\delta t}{4i\delta y^2}\psi^n_{i,j-1} + 
- \frac{-\delta t}{4i\delta y^2}\psi^n_{i,j+1} + \\ 
-(  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta y^2} + \frac{\delta t} {2i}V^n_{i,j} + 1)\psi^n_{i,j} + \\
- \frac{-\delta t}{4i\delta x^2}\psi^{n+1}_{i-1,j} + 
- \frac{-\delta t}{4i\delta x^2}\psi^{n+1}_{i+1,j} + 
-\frac{-\delta t}{4i\delta y^2}\psi^{n+1}_{i,j-1} + 
- \frac{-\delta t}{4i\delta y^2}\psi^{n+1}_{i,j+1} + \\ 
-(  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta y^2} + \frac{\delta t} {2i}V^{n+1}_{i,j} -1)\psi^{n+1}_{i,j} = 0 
-\end{split}
-\end{equation}
-
-Clearly, we cannot update each $\psi$ independently, so a matrix solution is required to compute the update. The required matrix equation is shown below.
-
-\begin{equation}
-\begin{tikzpicture}[baseline=(current bounding box.center)]
-\matrix (m) [matrix of math nodes,nodes in empty cells,right delimiter={]},left delimiter={[} ]{
-1 &  & && & &  & &  \\
-& 1 &  & && & &  & &  \\
-\ddots & \ddots & \ddots & \ddots & \ddots & \ddots &\ddots & \ddots & \ddots \\
-c & \cdots & b	&	a_{1,1}	& b &	\cdots & c  & \cdots & \cdots \\
-\cdots & c & \cdots & b	&	a_{2,1}	& b &	\cdots & c  & \cdots \\
-\ddots & \ddots & \ddots & \ddots & \ddots & \ddots &\ddots & \ddots & \ddots \\
-} ;\end{tikzpicture}
-\begin{pmatrix}
-\psi^{n+1}_{0,0} \\ \psi^{n+1}_{1,0}\\\vdots\\ \psi^{n+1}_{0,1} \\ \psi^{n+1}_{1,1} \\\vdots  
-\end{pmatrix}=
-\begin{pmatrix}
-d^{n}_{0,0} \\ d^{n}_{1,0}\\\vdots\\ d^{n}_{0,1} \\ d^{n}_{1,1} \\\vdots  
-\end{pmatrix}
-\label{eq:eqq1}
-\end{equation}
-
-The RHS of this equation consists of the terms of equation (3) from the previous timestep.  
-
-The coefficient matrix can be difficult to visualize, and some subtleties are worth discussing.  First, the ones along the diagonal enforce the boundary condition that the next value of $\psi$ is equal to the previous value of $\psi$ on the boundaries.  These are rows are not needed in the matrix, but including them ensures that the coefficients $a_{i,j}$ remain on the diagonal of the matrix.  This is important, since these values are often larger than $b$ and $c$, so this matrix is more likely to be diagonally-dominant, or at least close to it.  For diagonally-dominant matrices, a simple matrix-splitting technique, like a Jacobi iteration, can solve the matrix equation.
-
-Note that the vector $\psi^{n+1}$ reflects the x-major storage used to store the domain.   
-
-The coefficients used in the above matrix equation are shown below.
-\begin{equation}
-\begin{split}
-c = \frac{-\delta t}{4i\delta x^2} \\
-b = \frac{-\delta t}{4i\delta y^2} \\
-a_{i,j} = (  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta x^2} + \frac{\delta t} {2i}V^{n+1}_{i,j} - 1) \\
-d_{i,j} = 	\frac{-\delta t}{4i\delta x^2}\psi^n_{i-1,j} + 
-			\frac{-\delta t}{4i\delta x^2}\psi^n_{i+1,j} +
-			\frac{-\delta t}{4i\delta y^2}\psi^n_{i,j-1} + 
- 			\frac{-\delta t}{4i\delta y^2}\psi^n_{i,j+1} + \\ 
-			(  \frac{\delta t}{2i\delta x^2} + \frac{\delta t}{2i\delta y^2} + \frac{\delta t} 				{2i}V^n_{i,j} + 1)\psi^n_{i,j}\\
-\end{split}
-\end{equation}
-
-Here are a few other notes:
-\begin{itemize}
-  \item From these equations, we see that $a_{i,j}$ has terms of differing sign, so we cannot be sure that the coefficient matrix is diagonally-dominant.
-  \item In general, for iterative matrix solvers, we must start with an initial guess.  The matrix solution may converge more quickly if the supplied guess is the solution from the last time-step (which will be somewhat similar to the solution for the next time-step).
-  
-\end{itemize}
-
-\subsection{Boundary Conditions}
-
-For any FDTD simulation, boundary conditions must always be considered.  According to [], it appears 
-
 \section{Results and Discussion} 
 
-For now, we will simply try to re-create some results from [].
+For now, we will simply try to re-create some results from \citep{reference}.
 
 \subsection{Free Propagation of Gaussian Wave-packet}
 
-First, we try to re-create free propagation.  The propagation is not strictly 'free', since we have initialized a potential 'bowl' near the edge of the domain as our boundary condition.  This experiment can be run with the function $examples::run_cn2()$ from the supplied source-code. Listed below are some parameters for the simulation:
+First, we try to re-create free propagation.  The propagation is not strictly 'free', since we have initialized a potential 'bowl' near the edge of the domain as our boundary condition.  This experiment can be run with the function $examples::run\_cn2()$ from the supplied source-code. Listed below are some parameters for the simulation:
 
 \begin{center}
     \begin{tabular}{ | l | l  |}
@@ -1370,35 +1333,37 @@ The results from the simulation can be seen in Figures \ref{fig:p1} - \ref{fig:p
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[scale=0.55,trim = 2mm 20mm 12mm 15mm,clip=true]{prop1.png}
-\caption{Free propagation, timestep = 0 (See Figure 9 from [].}
+\includegraphics[scale=0.55,trim = 2mm 12mm 12mm 2mm,clip=true]{prop1.png}
+\caption{Free propagation, time step = 0 (See Figure 9 from \citep{reference}).}
 \label{fig:p1}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[scale=0.55,trim = 2mm 20mm 12mm 15mm,clip=true]{prop2.png}
-\caption{Free propagation, timestep = 1000 (See Figure 9 from [].}
+\includegraphics[scale=0.55,trim = 2mm 12mm 12mm 2mm,clip=true]{prop2.png}
+\caption{Free propagation, time step = 1000}
 \label{fig:p2}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[scale=0.55,trim = 2mm 20mm 12mm 15mm,clip=true]{prop3.png}
-\caption{Free propagation, timestep = 2000 (See Figure 9 from [].}
+\includegraphics[scale=0.55,trim = 2mm 12mm 12mm 2mm,clip=true]{prop3.png}
+\caption{Free propagation, time step = 2000}
 \label{fig:p3}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[scale=0.55,trim = 2mm 20mm 12mm 15mm,clip=true]{prop4.png}
-\caption{Free propagation, timestep = 2600 (See Figure 9 from []. We see that the wave packet is impinging on the potential wall.}
+\includegraphics[scale=0.55,trim = 2mm 12mm 12mm 2mm,clip=true]{prop4.png}
+\caption{Free propagation, time step = 2600. We see that the wave packet is impinging on the potential wall.}
 \label{fig:p3}
 \end{figure}
 
-\subsection{Gaussian Wave-packet Tunneling}
+\newpage
 
-Next, we attempt to observe tunneling through a large potential barrier.  This simulation can be reproduced by running $examples::run_cn3()$ from the source code. Here are the parameters for this simulation.:
+\subsection{Gaussian Wave Packet Tunneling}
+
+Next, we attempt to observe tunneling through a large potential barrier.  This simulation can be reproduced by running $examples::run\_cn3()$ from the source code. Here are the parameters for this simulation.:
 
 \begin{center}
     \begin{tabular}{ | l | l  |}
@@ -1421,21 +1386,21 @@ Note that the potential barrier is defined as a Gaussian, as in the following eq
 
 \begin{equation}
 \begin{split}
-V(x) = a*exp( -(x-x_0)^2 / (2\sigma^2) )
+V(x) = a\exp( \frac{-(x-x_0)^2}{(2\sigma^2)} )
 \end{split}
 \end{equation}
 
 This means the potential barrier has a maximum height of 1000, and is tightly focused, in a spatial sense.
 
-The results of this experiment are shown in Figures \ref{fig:b1} - \ref{fig:b3}.  In figure\ref{fig:b2}, we see the wavepacket begin to impinge upon the potential barrier.  In Figure \ref{fig:b3}, it is noticed that some of the waveform has tunneled through the barrier, and some is reflected back.  This result matches the reference work quite well, but note the difference in aspect ratio and colormap.
+The results of this experiment are shown in Figures \ref{fig:b1} - \ref{fig:b3}.  In Figure \ref{fig:b2}, we see the wave packet begin to impinge upon the potential barrier.  In Figure \ref{fig:b3}, it is noticed that some of the waveform has tunneled through the barrier, and some is reflected back.  This result matches the reference work quite well, but note the difference in aspect ratio and colormap.
 
-Also, notice that we have used twice the time step as compared to the reference work, without any ill effects.  This is probably due the stability of the Crank-Nicholson method.  
+Also, notice that we have used twice the time step as compared to the reference work, without any ill effects.  This is due the stability of the Crank-Nicholson method.  I was able to complete the simulation using even larger time steps, but convergence was much slower. 
 
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[scale=0.65,trim = 2mm 25mm 2mm 15mm]{barrier1.png}
-\caption{Wavepacket moving toward the potential barrier (which is located at $x_0 = 0.75$ }
+\caption{Wavepacket moving toward the potential barrier (which is located at $x_0 = 0.75$) }
 \label{fig:b1}
 \end{figure}
 
@@ -1454,10 +1419,10 @@ Also, notice that we have used twice the time step as compared to the reference 
 \label{fig:b3}
 \end{figure}
 
-
+\newpage
 \subsection{Double-Slit Experiment}
 
-Finally, we repeat the double-slit experiment from the reference work, which produces an interesting result.  This simulation can be reproduced by running $examples::run_cn4()$ from the source code. Here are the parameters for this simulation.:
+Finally, we repeat the double-slit experiment from the reference work, which produces an interesting result.  This simulation can be reproduced by running $examples::run\_cn4()$ from the source code. Here are the parameters for this simulation:
 
 \begin{center}
     \begin{tabular}{ | l | l  |}
@@ -1481,30 +1446,30 @@ Notice that we have again chosen our time step to be twice as large as that of t
 
 In Figure \ref{fig:ds3}, we see the domain's potential.  The slits can be observed, as well as the slightly increased potential near the walls of the domain, which serve as our boundary conditions.
 
-Figures \ref{fig:ds1} and \ref{fig:ds2} show the expected diffraction, and match closely with the results produced in [].
+Figures \ref{fig:ds1} and \ref{fig:ds2} show the expected diffraction, and match closely with the results produced in \citep{reference}.
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[scale=0.85,trim = 20mm 20mm 20mm 9mm,clip=true]{doubleslit800.png}
-\caption{Double slit experiment.  Note that this figure is upside down with respect to the corresponding image in [].}
+\caption{Double slit experiment.  Note that this figure is upside down with respect to the corresponding image in \citep{reference}.}
 \label{fig:ds1}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[scale=0.85,trim = 20mm 60mm 70mm 9mm,clip=true]{doubleslit1200.png}
+\includegraphics[scale=0.85,trim = 20mm 50mm 70mm 9mm,clip=true]{doubleslit1200.png}
 \caption{Double slit experiment}
 \label{fig:ds2}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[scale=0.85,trim = 10mm 10mm 2mm 8mm,clip=true]{potential.png}
+\includegraphics[scale=0.85,trim = 10mm 10mm 4mm 8mm,clip=true]{potential.png}
 \caption{Potential for double slit experiment}
 \label{fig:ds3}
 \end{figure}
 
-Note that while [] mentioned that this result took about 30 minutes to produce, the present code was able to complete the simulation within a few minutes.
+Note that while \citep{reference} mentioned that this result took about 30 minutes to produce, the present code was able to complete the simulation within a few minutes.
 
 \section{Future Work}
 
@@ -1524,11 +1489,14 @@ Of course, it is probably more involved than this.
 
 \subsection{Periodic Boundary Conditions}
 
-This should not be too hard, and may be required for R/T coefficients to be precisely correct. Also, I noticed that, empirically, much of the norm loss for a given simulation may have been due to problems with the boundary conditions.
+This should not be too hard, and may be required for R/T coefficients to be precisely correct. Also, I am not completely convinced that the potential well idea used as the boundary condition is totally sufficient. For example, should not tunneling occur through the barrier walls?
 
+\subsection{Higher-Order Explicit Method}
+
+As noted earlier, I did not have much success with the Runge-Kutta method.  It would be important to learn to implement this, or another more stable explicit method.  Since explicit schemes have lower computational complexity than a matrix solution, the Crank-Nicholson scheme used in this work may be unreasonable for very large problems.  
 \section{Conclusion}
 
-In this work, we have successfully created a FDTD code to simulate Schrodinger dynamics.  Using this code, we were able to simulate some basic behavior, and match results from the literature.  
+In this work, we have successfully created a finite difference code to simulate Schrodinger dynamics.  Using this code, we were able to simulate some basic behavior, and match results from the literature.  
 
 We got a lot of mileage out of our rudimentary conjugate gradient solver, and in fact, convergence of the matrix solution was often the limiting factor in choosing a time step.  In other words, other solution methods may converge with even larger time steps, and/or converge more quickly.
 
